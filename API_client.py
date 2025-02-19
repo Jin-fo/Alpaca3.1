@@ -220,60 +220,41 @@ def Client_history(self, type: str, time: int, step: int):
     return bar
 
 async def Client_stream(self, type: str):
-    """Stream real-time market data."""
+    """Stream bar data."""
     print("[o][BAR Stream]")
     
-    MAX_RETRIES = 3
-    RETRY_DELAY = 5  # seconds
-    
-    for attempt in range(MAX_RETRIES):
-        try:
-            # Set up stream URL based on asset type
-            if self.symbol.exchange == 'CRYPTO':
-                url = BaseURL.MARKET_DATA_STREAM.value + "/v1beta3/crypto/" + CryptoFeed.US
-            elif self.symbol.exchange != 'CRYPTO':
-                url = BaseURL.MARKET_DATA_STREAM.value + "/v2/" + DataFeed.IEX
-                
-            # Initialize and configure stream
-            stream = DataStream(url, self.API_KEY, self.SECRET_KEY)
+    try:
+        # Set up stream URL based on asset type
+        if self.symbol.exchange == 'CRYPTO':
+            url = BaseURL.MARKET_DATA_STREAM.value + "/v1beta3/crypto/" + CryptoFeed.US
+        elif self.symbol.exchange != 'CRYPTO':
+            url = BaseURL.MARKET_DATA_STREAM.value + "/v2/" + DataFeed.IEX
             
-            # Subscribe to appropriate data type
-            if type.upper() == "BAR":
-                handler_type = "trades"
-            else:
-                handler_type = type.lower()
-                
-            stream._subscribe(
-                handler=self.on_update,
-                symbols=((self.symbol).symbol,),
-                handlers=stream._handlers[handler_type]
-            )
+        # Initialize and configure stream
+        stream = DataStream(url, self.API_KEY, self.SECRET_KEY)
+        
+        # Subscribe to trades for bar data
+        stream._subscribe(
+            handler=self.on_update,
+            symbols=((self.symbol).symbol,),
+            handlers=stream._handlers["trades"]
+        )
+        
+        print("[~][Retrieving bar data...]")
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, stream.run)
             
-            print("[~][Retrieving...]")
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, stream.run)
-            break  # If successful, exit retry loop
-                
-        except Exception as e:
-            print(f"Stream error (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
-            if attempt < MAX_RETRIES - 1:
-                print(f"Retrying in {RETRY_DELAY} seconds...")
-                await asyncio.sleep(RETRY_DELAY)
-            else:
-                print("Max retries reached. Stream failed to start.")
+    except Exception as e:
+        print(f"Stream error: {e}")
 
 async def Client_on_update(self, data):
-    """Handle incoming stream data."""
+    """Handle incoming bar data."""
     try:
-        if hasattr(data, 'close'):
-            # Bar data
-            print(f"[{time_now()}] Bar Price: {data.close}")
-        elif hasattr(data, 'price'):
-            # Trade data
-            print(f"[{time_now()}] Trade Price: {data.price}")
+        if hasattr(data, 'price'):
+            print(f"[{time_now()}] Price: {data.price}")
         else:
-            # Other data types
             print(f"[{time_now()}] Data: {data}")
+        return data
     except Exception as e:
         print(f"Update error: {e}")
 
@@ -283,14 +264,3 @@ Client.focus = Client_focus
 Client.history = Client_history
 Client.stream = Client_stream
 Client.on_update = Client_on_update
-
-# Update the main task function
-async def task(account: Account, symbols: Union[str, List[str]], data_type: str):
-    """Execute trading operations for given symbols."""
-    try:
-        # Your trading logic here
-        pass
-        
-    finally:
-        # Cleanup account resources when task ends
-        await account.cleanup()

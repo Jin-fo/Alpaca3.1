@@ -68,7 +68,6 @@ async def main():
             name="main_trading_account"
         )
         account.info()
-        
         # Execute trading operations
         symbol = "BTC/USD"
         await task(account, symbol)
