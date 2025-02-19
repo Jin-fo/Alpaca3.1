@@ -2,6 +2,7 @@ from API_client import *
 from AI_model import *
 from Data_stats import *
 import asyncio
+import pandas as pd
 
 
 # API Credentials
@@ -9,53 +10,39 @@ API_KEY = "PKE1B8WAV2KJ324ZKQKC"
 SECRET_KEY = "Ro7nFRclHQekQSf5Tt3zbpJAr9AaXhQ7r67sJJDy"
 
 async def get_history(account: Account, symbol: str, days: int = 1, interval: int = 5):
-    """
-    Get historical market data.
-    
-    Args:
-        account: Trading account
-        symbol: Trading symbol (e.g., 'BTC/USD')
-        days: Days of history to retrieve
-        interval: Bar interval in minutes
-    """
+    """Get historical market data."""
     asset = account.focus(symbol)
     if not asset:
         return None
-        
-    hist_data = account.history(type="BAR", time=days, step=interval)
-    if hist_data is not None:
-        print(f"\nLast {interval} bars for {symbol}:")
-        print(hist_data.tail())
-    return hist_data
+    return account.history(type="BAR", time=days, step=interval)
 
-async def start_stream(account: Account, symbol: str):
-    """
-    Start real-time market data stream.
-    
-    Args:
-        account: Trading account
-        symbol: Trading symbol to stream
-    """
-    print("\nStarting real-time stream...")
+async def start_stream(account: Account, symbol: str, stats: Statistic):
+    """Start real-time market data stream."""
     try:
+        # Store Statistic instance in account for stream updates
+        account.stats = stats
         await account.stream("BAR")
     except KeyboardInterrupt:
-        print("\nStream stopped by user")
+        pass
 
 async def task(account: Account, symbol: str):
-    """
-    Execute complete trading operation sequence.
-    
-    Args:
-        account: Trading account
-        symbol: Trading symbol
-    """
-    # Get historical data
+    """Execute complete trading operation sequence."""
     hist_data = await get_history(account, symbol)
-    
-    # Start streaming if we have historical data
     if hist_data is not None:
-        await start_stream(account, symbol)
+        stats = Statistic(symbol)
+        stats.clear()
+        print(f"\nSaving historical data for {symbol}...")
+        
+        hist_data = hist_data.reset_index()
+        
+        for _, row in hist_data.iterrows():
+            stats.append({
+                'price': row['close'],
+                'timestamp': account.time_now(row['timestamp'], return_format=True)
+            })
+        
+        print(f"\nStarting live data stream for {symbol}...")
+        await start_stream(account, symbol, stats)
 
 async def main():
     """Main application entry point."""

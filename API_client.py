@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Optional, Union, List
+import pandas as pd
 
 # Alpaca imports
 from alpaca.data.live.crypto import *
@@ -19,11 +20,6 @@ from alpaca.trading.requests import *
 from alpaca.trading.enums import *
 from alpaca.common.exceptions import APIError
 import asyncio
-
-# Function Declarations
-def time_now(country: str = "America", city: str = "New_York") -> datetime:
-    """Get current time in specified timezone."""
-    return datetime.now(ZoneInfo(f"{country}/{city}"))
 
 class Client:
     """Base trading client wrapper for Alpaca API."""
@@ -52,14 +48,10 @@ class Account(Client):
     """Trading account with market data and trading capabilities."""
     positions = {}
     orders = []
+    timezone = None  # Initialize timezone as None
 
     def __init__(self, api_key: str, secret_key: str, paper: bool, name: str):
-        """Initialize Account with API credentials and verify connection.
-        
-        Raises:
-            ValueError: If credentials are invalid
-            APIError: If unable to connect to the trading API
-        """
+        """Initialize Account with API credentials."""
         # Initialize parent Client class
         super().__init__(api_key, secret_key, paper, name)
         
@@ -67,21 +59,61 @@ class Account(Client):
         self.positions = {}
         self.orders = []
         
+        # Set default timezone
+        self.time_now(timezone_str="America/New_York")
+        
+        # Initialize trading client
         try:
-            # Initialize trading client
             self.client = TradingClient(self.API_KEY, self.SECRET_KEY, paper=self.paper)
-            
-            # Verify connection by getting account info
             account_info = self.client.get_account()
-            
             print(f"Successfully created trading account: {self.name}")
             print(f"Account ID: {account_info.id}")
             print(f"Account Status: {account_info.status}")
             if self.paper:
                 print("Paper trading mode enabled")
-                
         except APIError as e:
             raise APIError(f"Failed to connect to trading account: {str(e)}")
+
+    def time_now(self, timestamp=None, timezone_str: str = None, return_format: bool = False) -> Union[datetime, str]:
+        """
+        Get or convert time with timezone handling.
+        
+        Args:
+            timestamp: Optional timestamp to convert
+            timezone_str: Optional timezone to set (e.g., "America/New_York")
+            return_format: If True, returns formatted string, else returns datetime
+            
+        Returns:
+            datetime or formatted string in specified timezone
+        """
+        # Update timezone if specified
+        if timezone_str:
+            try:
+                self.timezone = ZoneInfo(timezone_str)
+                print(f"Timezone set to: {timezone_str}")
+            except Exception as e:
+                print(f"Error setting timezone {timezone_str}: {e}")
+                self.timezone = ZoneInfo("UTC")
+                print("Defaulting to UTC")
+
+        # Ensure we have a timezone set
+        if self.timezone is None:
+            self.timezone = ZoneInfo("UTC")
+            print("Timezone not set, using UTC")
+
+        # Get or convert time
+        if timestamp is None:
+            time = datetime.now(self.timezone)
+        else:
+            # Convert timestamp to datetime with timezone
+            if isinstance(timestamp, pd.Timestamp):
+                timestamp = timestamp.to_pydatetime()
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=ZoneInfo("UTC"))
+            time = timestamp.astimezone(self.timezone)
+
+        # Return formatted string or datetime
+        return time.strftime('%Y-%m-%d %H:%M:%S %Z') if return_format else time
 
     def order(self, side: str, qty: float):
         """Place a trading order."""
@@ -188,7 +220,7 @@ def Client_focus(self, symbols: Union[str, List[str]]):
 
 def Client_history(self, type: str, time: int, step: int):
     """Retrieve historical data for focused symbol."""
-    now = time_now()
+    now = self.time_now()  # Use combined time function
     
     if self.symbol.exchange == "CRYPTO":
         if type.upper() == "BAR":
@@ -213,10 +245,8 @@ def Client_history(self, type: str, time: int, step: int):
             bar = stock_history.get_stock_bars(data).df
 
     else:
-        print("[!][INVALID Exchange Type Error]")
         return None
     
-    print(f"[o][{type.upper()} History from {time} days, by {step} minutes]")
     return bar
 
 async def Client_stream(self, type: str):
@@ -248,15 +278,27 @@ async def Client_stream(self, type: str):
         print(f"Stream error: {e}")
 
 async def Client_on_update(self, data):
-    """Handle incoming bar data."""
+    """Handle incoming bar data and save to CSV."""
     try:
-        if hasattr(data, 'price'):
-            print(f"[{time_now()}] Price: {data.price}")
-        else:
-            print(f"[{time_now()}] Data: {data}")
+        if hasattr(self, 'stats'):
+            # Get timestamp from data or current time
+            timestamp = (self.time_now(data.timestamp) 
+                        if hasattr(data, 'timestamp') 
+                        else self.time_now())
+            
+            price_data = {
+                'price': data.price if hasattr(data, 'price') else data.close if hasattr(data, 'close') else None,
+                'timestamp': self.time_now(timestamp, return_format=True)
+            }
+            
+            if price_data['price'] is not None:
+                self.stats.append(price_data)
+                print(f"Stream data: ${price_data['price']:.2f} at {price_data['timestamp']}", end='\r')
         return data
     except Exception as e:
-        print(f"Update error: {e}")
+        print(f"\nStream error: {e}")
+        import traceback
+        print(traceback.format_exc())
 
 # Bind method implementations to Client class
 Client.show_symbol = Client_show_symbol
