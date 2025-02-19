@@ -60,7 +60,7 @@ class Account(Client):
         self.orders = []
         
         # Set default timezone
-        self.time_now(timezone_str="America/New_York")
+        self.time(timezone_str="America/New_York")
         
         # Initialize trading client
         try:
@@ -74,7 +74,7 @@ class Account(Client):
         except APIError as e:
             raise APIError(f"Failed to connect to trading account: {str(e)}")
 
-    def time_now(self, timestamp=None, timezone_str: str = None, return_format: bool = False) -> Union[datetime, str]:
+    def time(self, timestamp=None, timezone_str: str = None, return_format: bool = False) -> Union[datetime, str]:
         """
         Get or convert time with timezone handling.
         
@@ -220,7 +220,7 @@ def Client_focus(self, symbols: Union[str, List[str]]):
 
 def Client_history(self, type: str, time: int, step: int):
     """Retrieve historical data for focused symbol."""
-    now = self.time_now()  # Use combined time function
+    now = self.time()
     
     if self.symbol.exchange == "CRYPTO":
         if type.upper() == "BAR":

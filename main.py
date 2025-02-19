@@ -38,7 +38,7 @@ async def task(account: Account, symbol: str):
         for _, row in hist_data.iterrows():
             stats.append({
                 'price': row['close'],
-                'timestamp': account.time_now(row['timestamp'], return_format=True)
+                'timestamp': account.time(row['timestamp'], return_format=True)
             })
         
         print(f"\nStarting live data stream for {symbol}...")
