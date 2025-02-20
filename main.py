@@ -18,12 +18,10 @@ async def get_history(account: Account, symbol: str, days: int = 1, interval: in
 
 async def start_stream(account: Account, symbol: str, stats: Statistic):
     """Start real-time market data stream."""
-    try:
         # Store Statistic instance in account for stream updates
-        account.stats = stats
-        await account.stream("BAR")
-    except KeyboardInterrupt:
-        pass
+    account.stats = stats
+    await account.stream("bars")
+ 
 
 async def task(account: Account, symbol: str):
     """Execute complete trading operation sequence."""

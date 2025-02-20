@@ -249,7 +249,7 @@ def Client_history(self, type: str, time: int, step: int):
     
     return bar
 
-async def Client_stream(self, type: str):
+async def Client_stream(self, type:str):
     """Stream bar data."""
     print("[o][BAR Stream]")
     
@@ -267,7 +267,7 @@ async def Client_stream(self, type: str):
         stream._subscribe(
             handler=self.on_update,
             symbols=((self.symbol).symbol,),
-            handlers=stream._handlers["trades"]
+            handlers=stream._handlers[type]
         )
         
         print("[~][Retrieving bar data...]")
@@ -282,13 +282,13 @@ async def Client_on_update(self, data):
     try:
         if hasattr(self, 'stats'):
             # Get timestamp from data or current time
-            timestamp = (self.time_now(data.timestamp) 
+            timestamp = (self.time(data.timestamp) 
                         if hasattr(data, 'timestamp') 
-                        else self.time_now())
+                        else self.time())
             
             price_data = {
                 'price': data.price if hasattr(data, 'price') else data.close if hasattr(data, 'close') else None,
-                'timestamp': self.time_now(timestamp, return_format=True)
+                'timestamp': self.time(timestamp, return_format=True)
             }
             
             if price_data['price'] is not None:
